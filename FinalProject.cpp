@@ -1,16 +1,26 @@
+/*
+* FILE: 
+* PROJECT:
+* PROGRAMMERS:
+* DESCRIPTION:
+    * 
+*/
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #pragma warning(disable:4996)
 
 #define TABLE_SIZE 127
+#define MAX_FLIGHTS 5000
 
 /* Each parcel will have a link to another node in the tree and 3 variables inside */
 typedef struct Parcel {
     char* destination;
     int weight;
     float valuation;
-    struct Parcel* next;
+    //struct Parcel* next; //??????is this used?
 } Parcel;
 
 /* Tree node */
@@ -22,7 +32,7 @@ typedef struct BSTNode {
 
 /* 127 hash nodes will store 127 roots for 127 BSTs */
 typedef struct HashNode {
-    BSTNode* root;
+    BSTNode* root; 
 } HashNode;
 
 /* Function prototypes */
@@ -39,9 +49,11 @@ void searchByWeight(const char* country, int weight, int higher, HashNode* hashT
 void calculateTotalLoadAndValuation(const char* country, HashNode* hashTable);
 void displayCheapestAndMostExpensive(const char* country, HashNode* hashTable);
 void displayLightestAndHeaviest(const char* country, HashNode* hashTable);
+void findLowestPrice(BSTNode* root, Parcel** cheapestParcel);
+void findHighestPrice(BSTNode* root, Parcel** cheapestParcel);
 void cleanup(HashNode* hashTable);
 
-int main() {
+int main(void) {
     HashNode* hashTable = initializeHashTable();
 
     loadData("couriers.txt", hashTable);
@@ -51,7 +63,7 @@ int main() {
     int weight;
     int option;
 
-    while (1) {
+    while (true) {
         printf("\nMenu:\n");
         printf("1. Enter country name and display all the parcels details\n");
         printf("2. Enter country and weight pair to display parcels higher/lower than weight\n");
@@ -74,7 +86,7 @@ int main() {
                 while (getchar() != '\n'); // Clear invalid input
                 continue;
             }
-            searchByCountry(country, hashTable);
+            searchByCountry(country, hashTable); //???????added an error display if they entered a country incorrect?
             break;
         case 2:
             printf("Enter country name: ");
@@ -138,6 +150,11 @@ int main() {
 }
 
 /* Initialize the hash table */
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: uses dynamically allocated space to create a hash table, ensures that the root does not have dangling pointer by initializing
+// to null
+//RETURNS: 
 HashNode* initializeHashTable(void) {
     HashNode* hashTable = (HashNode*)malloc(TABLE_SIZE * sizeof(HashNode));
     if (hashTable == NULL) {
@@ -151,16 +168,25 @@ HashNode* initializeHashTable(void) {
 }
 
 /* Hash function using DJB2 algorithm */
+//FUNCTION: computeHash()
+//PARAMETERS: const char* str - the name of the country
+//DESCRIPTION: using the "djb2 function", this function creates unique hash values to be stored into the binary search tree at 
+// a specific bucket index of the hash table.
+//RETURNS: unsigned long - a generated index to be used in the hash table for the country that was passed to this function
 unsigned long computeHash(const char* str) {
-    unsigned long hash = 5381;
-    int c;
+    unsigned long hash = 5381; //magic num
+    int c = 0;
     while ((c = *str++)) {
-        hash = ((hash << 5) + hash) + c;
+        hash = ((hash << 5) + hash) + c; //magic num
     }
     return hash % TABLE_SIZE;
 }
 
 /* Create a new parcel */
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: allocates memory for destination dynamically
+//RETURNS: 
 Parcel* createParcel(const char* destination, int weight, float valuation) {
     Parcel* newParcel = (Parcel*)malloc(sizeof(Parcel));
     if (newParcel == NULL) {
@@ -173,13 +199,18 @@ Parcel* createParcel(const char* destination, int weight, float valuation) {
         exit(1);
     }
     strcpy(newParcel->destination, destination);
-    newParcel->weight = weight;
-    newParcel->valuation = valuation;
-    newParcel->next = NULL;
+    newParcel->weight = weight; //if gross weight is typically between 100gms and 50 000gms do we need to validate that it's within this range
+    newParcel->valuation = valuation; //as above, range is $10 to $2000 ?????????? do we have to error check or is it just for our info
+    //newParcel->next = NULL;
     return newParcel;
 }
 
 /* Insert parcel into BST */
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: ?????????? could make more modular and create an initialize data node function
+// each node in the BST represents a parcel. each node is placed using the parcel's weight
+//RETURNS: 
 BSTNode* insertBST(BSTNode* root, Parcel* parcel) {
     if (root == NULL) {
         BSTNode* newNode = (BSTNode*)malloc(sizeof(BSTNode));
@@ -199,25 +230,41 @@ BSTNode* insertBST(BSTNode* root, Parcel* parcel) {
 }
 
 /* Load data from file into hash table */
+//FUNCTION: 
+//PARAMETERS: 
+//DESCRIPTION: it's play to have more than 2000 names but not more than 5000, hence the while condition including "totalFLights < MAX_FLIGHTS"
+//RETURNS: 
 void loadData(const char* filename, HashNode* hashTable) {
-    FILE* file = fopen(filename, "r");
-    if (file == NULL) {
-        perror("Unable to open file");
+    FILE* pFile = fopen(filename, "r");
+    if (pFile == NULL) {
+        perror("Unable to open file\n\n");
         exit(1);
     }
-
+    int totalFlights = 0; //to ensure that the list of names is at least 2000 but does not exceed 5000
     char destination[21];
     int weight;
-    float valuation;
-    while (fscanf(file, "%20[^,],%d,%f\n", destination, &weight, &valuation) != EOF) {
+    float valuation; //?????????????????does it account for empty /  new lines
+    while ((fscanf(pFile, "%20[^,],%d,%f\n", destination, &weight, &valuation) != EOF) && totalFlights < MAX_FLIGHTS) { //EOF or NULL?
         Parcel* parcel = createParcel(destination, weight, valuation);
         unsigned long index = computeHash(destination);
         hashTable[index].root = insertBST(hashTable[index].root, parcel);
+        totalFlights++; 
     }
-    fclose(file);
+    if (ferror(pFile)){
+        clearerr(pFile);
+    }
+    if (fclose(pFile) == EOF) {
+        printf("Error closing file\n\n");
+        clearerr(pFile);
+    }
+    
 }
 
 /* Prints parcels info */
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: prints the bst with in-order traversal
+//RETURNS: 
 void printParcels(BSTNode* root) {
     if (root != NULL) {
         printParcels(root->left);
@@ -228,6 +275,11 @@ void printParcels(BSTNode* root) {
 }
 
 /* Search parcels by country */
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: re-hashes country name to find the index of the hash table that contains the root of the country's bst.
+// then prints the bst of that root by calling the printParcels function
+//RETURNS: 
 void searchByCountry(const char* country, HashNode* hashTable) {
     unsigned long index = computeHash(country);
     BSTNode* root = hashTable[index].root;
@@ -235,6 +287,10 @@ void searchByCountry(const char* country, HashNode* hashTable) {
 }
 
 /* Display parcels with weight higher or lower than specified */
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: 
+//RETURNS: 
 void searchByWeightHelper(BSTNode* root, int weight, int higher) {
     if (root == NULL) {
         return;
@@ -249,6 +305,10 @@ void searchByWeightHelper(BSTNode* root, int weight, int higher) {
 }
 
 /* Main function to search parcels by weight */
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: 
+//RETURNS: 
 void searchByWeight(const char* country, int weight, int higher, HashNode* hashTable) {
     unsigned long index = computeHash(country);
     BSTNode* root = hashTable[index].root;
@@ -256,6 +316,10 @@ void searchByWeight(const char* country, int weight, int higher, HashNode* hashT
 }
 
 /* Calculate total parcel load and valuation for a country */
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: 
+//RETURNS: 
 void calculateTotalLoadAndValuation(const char* country, HashNode* hashTable) {
     unsigned long index = computeHash(country);
     BSTNode* root = hashTable[index].root;
@@ -269,6 +333,10 @@ void calculateTotalLoadAndValuation(const char* country, HashNode* hashTable) {
 }
 
 /* Display the cheapest and most expensive parcels */
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: 
+//RETURNS: 
 void displayCheapestAndMostExpensive(const char* country, HashNode* hashTable) {
     unsigned long index = computeHash(country);
     BSTNode* root = hashTable[index].root;
@@ -278,20 +346,55 @@ void displayCheapestAndMostExpensive(const char* country, HashNode* hashTable) {
     }
     Parcel* cheapest = root->parcel;
     Parcel* mostExpensive = root->parcel;
-    while (root != NULL) {
-        if (root->parcel->valuation < cheapest->valuation)
-            cheapest = root->parcel;
-        if (root->parcel->valuation > mostExpensive->valuation)
-            mostExpensive = root->parcel;
-        root = root->right;
-    }
+
+    findLowestPrice(root, &cheapest);
+    findHighestPrice(root, &mostExpensive);
+
     printf("Cheapest Parcel - Destination: %s, Weight: %d, Valuation: %.2f\n",
         cheapest->destination, cheapest->weight, cheapest->valuation);
     printf("Most Expensive Parcel - Destination: %s, Weight: %d, Valuation: %.2f\n",
         mostExpensive->destination, mostExpensive->weight, mostExpensive->valuation);
 }
 
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: 
+//RETURNS: 
+void findLowestPrice(BSTNode* root, Parcel** cheapestParcel) {
+    if (root == NULL) {
+        return;
+    }
+    //check if the current node's price is lower than the price from the previous root
+    if (root->parcel->valuation < (*cheapestParcel)->valuation) {
+        *cheapestParcel = root->parcel;
+    }
+
+    findLowestPrice(root->left, cheapestParcel); //traverse through the whole bst
+    findLowestPrice(root->right, cheapestParcel);
+}
+
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: 
+//RETURNS: 
+void findHighestPrice(BSTNode* root, Parcel** expensiveParcel) {
+    if (root == NULL) {
+        return;
+    }
+    //check if the current node's price is lower than the price from the previous root
+    if (root->parcel->valuation > (*expensiveParcel)->valuation) {
+        *expensiveParcel = root->parcel;
+    }
+
+    findHighestPrice(root->left, expensiveParcel); //traverse through the whole bst
+    findHighestPrice(root->right, expensiveParcel);
+}
+
 /* Display the lightest and heaviest parcels */
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: 
+//RETURNS: 
 void displayLightestAndHeaviest(const char* country, HashNode* hashTable) {
     unsigned long index = computeHash(country);
     BSTNode* root = hashTable[index].root;
@@ -310,24 +413,34 @@ void displayLightestAndHeaviest(const char* country, HashNode* hashTable) {
         root = root->right;
     }
 
-    printf("Lightest Parcel - Destination: %s, Weight: %d, Valuation: %.2f\n",
+    printf("Heaviest Parcel - Destination: %s, Weight: %d, Valuation: %.2f\n",
         root->parcel->destination, root->parcel->weight, root->parcel->valuation);
 }
 
 /* Cleanup memory */
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: 
+//RETURNS: 
 void cleanup(HashNode* hashTable) {
     for (int i = 0; i < TABLE_SIZE; ++i) {
         BSTNode* root = hashTable[i].root;
         while (root != NULL) {
             BSTNode* temp = root;
             root = root->right;
-            free(temp->parcel->destination);
-            free(temp->parcel);
+            if (temp->parcel != NULL){ //did this get rid of warning?
+                free(temp->parcel->destination);
+                free(temp->parcel);
+            }
             free(temp);
         }
     }
 }
 
+//FUNCTION: 
+//PARAMETERS:
+//DESCRIPTION: 
+//RETURNS: 
 void traverseBST(BSTNode* node, int& totalWeight, float& totalValuation) {
     if (node == NULL) {
         return;
