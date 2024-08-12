@@ -19,8 +19,10 @@
 #define TABLE_SIZE 127
 #define MAX_FLIGHTS 5000
 #define VALID_INPUT 1 //used to determine if parse was valid
-#define HIGHER 1
-#define LOWER 2
+#define HIGHER 1 //used to check user input for searching by weight
+#define LOWER 2 //^
+#define SEARCH_HIGH 1
+#define SEARCH_LOW 0
 
 /* Each parcel will have a link to another node in the tree and 3 variables inside */
 typedef struct Parcel {
@@ -58,6 +60,7 @@ void displayLightestAndHeaviest(const char* country, HashNode* hashTable);
 void findLowestPrice(BSTNode* root, Parcel** cheapestParcel);
 void findHighestPrice(BSTNode* root, Parcel** cheapestParcel);
 void cleanup(HashNode* hashTable);
+void freeBST(BSTNode* root);
 
 int main(void) {
     HashNode* hashTable = initializeHashTable();
@@ -114,9 +117,9 @@ int main(void) {
                 continue;
             }
             if (option == HIGHER)
-                searchByWeight(country, weight, 1, hashTable);
+                searchByWeight(country, weight, SEARCH_HIGH, hashTable);
             else if (option == LOWER)
-                searchByWeight(country, weight, 0, hashTable);
+                searchByWeight(country, weight, SEARCH_LOW, hashTable);
             else //if they don't enter valid higher or lower weight option, then just restart menu
             {
                 printf("Invalid input.\n");
@@ -199,7 +202,7 @@ unsigned long computeHash(const char* str) {
 //FUNCTION: createParcel()
 //PARAMETERS: const char* destination, int weight, float valuation - values that will be given to the fields of the parcel struct
 //DESCRIPTION: dynamically allocates space for the new parcel and also allocates memory for destination dynamically. 
-//RETURNS: 
+//RETURNS: newParcel - pointer to the new parcel
 Parcel* createParcel(const char* destination, int weight, float valuation) {
     Parcel* newParcel = (Parcel*)malloc(sizeof(Parcel));
     if (newParcel == NULL) {
@@ -218,11 +221,14 @@ Parcel* createParcel(const char* destination, int weight, float valuation) {
 }
 
 /* Insert parcel into BST */
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: ?????????? could make more modular and create an initialize data node function
-// each node in the BST represents a parcel. each node is placed using the parcel's weight
-//RETURNS: 
+//FUNCTION: insertBST()
+//PARAMETERS: BSTNode* root - the root of the BST the parcel is about to be inserted into, Parcel* parcel - the new parcel node to be inserted
+//DESCRIPTION: dynamically allocates space for the parcel as a BST node, which holds a ptr to the parcel itself, as well as left and right.
+// each node in the BST represents a parcel. each node is placed using the parcel's weight. the original root is placed at random, it is 
+// assumed (hoped) that the text file is randomized enough so that the lowest or highest weighted node is not the root. the function uses
+// recusion to traverse through the tree until the condition of (root == NULL) is met, at which point the bst node will be created to insert it.
+//RETURNS: root - first the root of the node that was created, then continuing to return through the recusion until the main recieves the return value
+// of the original root of the whole bst
 BSTNode* insertBST(BSTNode* root, Parcel* parcel) {
     if (root == NULL) {
         BSTNode* newNode = (BSTNode*)malloc(sizeof(BSTNode));
@@ -242,10 +248,13 @@ BSTNode* insertBST(BSTNode* root, Parcel* parcel) {
 }
 
 /* Load data from file into hash table */
-//FUNCTION: 
-//PARAMETERS: 
-//DESCRIPTION: it's play to have more than 2000 names but not more than 5000, hence the while condition including "totalFLights < MAX_FLIGHTS"
-//RETURNS: 
+//FUNCTION: loadData()
+//PARAMETERS: const char* filename, HashNode* hashTable - the file name from main to be opened, and the hash table to insert the countries into
+//DESCRIPTION: using FILE i/o to read from the couriers.txt file. after reading the name of the country as well as it's details, the info is sent
+// to the createParcel function to create a new parcel node. the name of the country is then given a hash value from the computeHash function, which 
+// value is then used to index the hashTable. the parcel is then inserted at this index of the hashTable with the insertBST() function. the total flights 
+// then incremented to ensure that the number of flights does not exceed 5000, as per requirements state. ensures proper error checking for file io
+//RETURNS: void
 void loadData(const char* filename, HashNode* hashTable) {
     FILE* pFile = fopen(filename, "r");
     if (pFile == NULL) {
@@ -273,10 +282,11 @@ void loadData(const char* filename, HashNode* hashTable) {
 }
 
 /* Prints parcels info */
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: prints the bst with in-order traversal
-//RETURNS: 
+//FUNCTION: printParcels()
+//PARAMETERS: BSTNode* root - root of a specific index of the hashtable
+//DESCRIPTION: prints the bst with in-order traversal. the argument sent to the parameter is actually the root of a specific index of the hash table
+// representing a specific country - so this function prints all the parcels of a country. this function is utilized by searchByCountry()
+//RETURNS: void
 void printParcels(BSTNode* root) {
     if (root != NULL) {
         printParcels(root->left);
@@ -287,11 +297,11 @@ void printParcels(BSTNode* root) {
 }
 
 /* Search parcels by country */
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: re-hashes country name to find the index of the hash table that contains the root of the country's bst.
+//FUNCTION: searchByCountry()
+//PARAMETERS: const char* country, HashNode* hashTable - the country to search and the entire hashtable holding all countries
+//DESCRIPTION: this function re-hashes the country name to find the index of the hash table that contains the root of the country's bst.
 // then prints the bst of that root by calling the printParcels function
-//RETURNS: 
+//RETURNS: void
 void searchByCountry(const char* country, HashNode* hashTable) {
     unsigned long index = computeHash(country);
     BSTNode* root = hashTable[index].root;
@@ -303,10 +313,15 @@ void searchByCountry(const char* country, HashNode* hashTable) {
 }
 
 /* Display parcels with weight higher or lower than specified */
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: 
-//RETURNS: 
+//FUNCTION: searchByWeightHelper()
+//PARAMETERS: BSTNode* root, int weight, int higher - the country tree to search, the weight of the country being search, and an int variable indicating
+// whether to search for higher or lower weighted parcels of the inputted weight
+//DESCRIPTION: of the root is null, it means that portion of the tree has been fully searched/is at the leaf of the bst. when deciding whether to 
+// print the higher or lower weighted parcels, the integer variable "higher" is used as a boolean value. if the inputted variable is 1 (or true, meaning to
+// search for parcels higher than) and the current parcel being searched is greater than the inputted weight, then the details of that current parcel is printed.
+// if the boolean "higher" variable is 0 (or false, meaning search for lower), the condition is not false (cancels to true) and the current parcel weight is
+// lower than the weight being compared to, the it's details are printed. the function uses in-order traversal, visiting the left subtree, the current, then right.
+//RETURNS: void
 void searchByWeightHelper(BSTNode* root, int weight, int higher) {
     if (root == NULL) {
         return;
@@ -321,10 +336,12 @@ void searchByWeightHelper(BSTNode* root, int weight, int higher) {
 }
 
 /* Main function to search parcels by weight */
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: 
-//RETURNS: 
+//FUNCTION: searchByWeight()
+//PARAMETERS: const char* country, int weight, int higher, HashNode* hashTable
+//DESCRIPTION: finds the hash value of the country to find the index of the hash table to send to the searchByWeightHelper() function. it also
+// sends the weight of the country being searched, as well as as an int variable called higher. higher is the menu option of 1 or 2, taken from 
+// user input in main.
+//RETURNS: void
 void searchByWeight(const char* country, int weight, int higher, HashNode* hashTable) {
     unsigned long index = computeHash(country);
     BSTNode* root = hashTable[index].root;
@@ -332,10 +349,11 @@ void searchByWeight(const char* country, int weight, int higher, HashNode* hashT
 }
 
 /* Calculate total parcel load and valuation for a country */
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: 
-//RETURNS: 
+//FUNCTION: calculateTotalLoadAndValuation()
+//PARAMETERS: const char* country, HashNode* hashTable - country being calculated and hashtable to get the country info from
+//DESCRIPTION: takes the country being searched for and finds the hash value to access the index of the hashtable which contains the bst for the country.
+// it then traverses through the bst to find the total weight and valuation, and finally prints the total two values.
+//RETURNS: void
 void calculateTotalLoadAndValuation(const char* country, HashNode* hashTable) {
     unsigned long index = computeHash(country);
     BSTNode* root = hashTable[index].root;
@@ -349,10 +367,14 @@ void calculateTotalLoadAndValuation(const char* country, HashNode* hashTable) {
 }
 
 /* Display the cheapest and most expensive parcels */
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: 
-//RETURNS: 
+//FUNCTION: displayCheapestAndMostExpensive()
+//PARAMETERS: const char* country, HashNode* hashTable - country being calculated and hashtable to get the country info from
+//DESCRIPTION: takes the country being searched for and finds the hash value to access the index of the hashtable which contains the bst for the country.
+// first the pointer variables for cheapest and most expensive point to the current root's parcelc, the parcel that these pointers point to is expected to change
+// when sent to the findLowestPrice() and findHighestPrice() functions. the root of the hash table is sent to these two functions with the pointers to the
+// cheaptest / most expensive, as the functions traverse it will point to the parcel that is true of the condition (of either cheapest or most expensive). it 
+// then prints the information of the parcels that these pointers point to.
+//RETURNS: void
 void displayCheapestAndMostExpensive(const char* country, HashNode* hashTable) {
     unsigned long index = computeHash(country);
     BSTNode* root = hashTable[index].root;
@@ -372,10 +394,13 @@ void displayCheapestAndMostExpensive(const char* country, HashNode* hashTable) {
         mostExpensive->destination, mostExpensive->weight, mostExpensive->valuation);
 }
 
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: 
-//RETURNS: 
+//FUNCTION: findLowestPrice()
+//PARAMETERS: BSTNode* root, Parcel** cheapestParcel - the bst tree to search and a pointer that will point to the cheapest parcel
+//DESCRIPTION: the function uses pre-order traversal. it evaluates the lowest price condition by checking if the current parcel's
+// valuation is less than what the cheapestParcel pointer's valuation is. if the current parcel's valuation is cheaper, then the 
+// pointer then points to the current parcel. then it traverses the left, then the right sub tree. searching the entire tree to assign
+// the cheapestParcel the lowest value.
+//RETURNS: void - the pointer does not need to be returned since it's being passed by reference.
 void findLowestPrice(BSTNode* root, Parcel** cheapestParcel) {
     if (root == NULL) {
         return;
@@ -389,10 +414,13 @@ void findLowestPrice(BSTNode* root, Parcel** cheapestParcel) {
     findLowestPrice(root->right, cheapestParcel);
 }
 
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: 
-//RETURNS: 
+//FUNCTION: findHighestPrice()
+//PARAMETERS: BSTNode* root, Parcel** expensiveParcel - the bst tree to search and a pointer that will point to the most expensive parcel
+//DESCRIPTION: the function uses pre-order traversal. it evaluates the highest price condition by checking if the current parcel's
+// valuation is greater than what the expensiveParcel pointer's valuation is. if the current parcel's valuation is more expensive, then the 
+// pointer then points to the current parcel. then it traverses the left, then the right sub tree. searching the entire tree to assign
+// the expensiveParcel the greatest value.
+//RETURNS: void - the pointer does not need to be returned since it's being passed by reference.
 void findHighestPrice(BSTNode* root, Parcel** expensiveParcel) {
     if (root == NULL) {
         return;
@@ -407,10 +435,11 @@ void findHighestPrice(BSTNode* root, Parcel** expensiveParcel) {
 }
 
 /* Display the lightest and heaviest parcels */
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: 
-//RETURNS: 
+//FUNCTION: displayLightestAndHeaviest()
+//PARAMETERS: const char* country, HashNode* hashTable - country being calculated and hashtable to get the country info from
+//DESCRIPTION: takes the root index and visits the leftmost side of the bst to find the lowest weighted parcel, the visits the rightmost side
+// of the bst to find the heaviest. it prints the information of the parcel for these lowets and highest parcels.
+//RETURNS: void
 void displayLightestAndHeaviest(const char* country, HashNode* hashTable) {
     unsigned long index = computeHash(country);
     BSTNode* root = hashTable[index].root;
@@ -434,29 +463,63 @@ void displayLightestAndHeaviest(const char* country, HashNode* hashTable) {
 }
 
 /* Cleanup memory */
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: 
-//RETURNS: 
+//FUNCTION: cleanup()
+//PARAMETERS: HashNode* hashTable
+//DESCRIPTION: frees the dynamically allocated space from the hash table, it sends each index of the table to the function freeBST() which
+// traverses the entire bst to ensure each node is freed
+//RETURNS: void
+void cleanup(HashNode* hashTable) {
+    for (int i = 0; i < TABLE_SIZE; ++i) {
+        if (hashTable[i].root != NULL) {
+            freeBST(hashTable[i].root); // Free the BST rooted at this hash table entry
+        }
+    }
+}
+
+//FUNCTION: freeBST()
+//PARAMETERS: BSTNode* root - root of the country's bst to be freed
+//DESCRIPTION: called from the cleanup function, traverses the entire root of the hashtable index. using post order traversal. visits the left then right
+// subtree before deleting the node, it ensures the dynamically allocated space from the parcel node (destination) and bst node (parcel) is also freed, 
+// before freeing the actual node of the hash table itself.
+//RETURNS: void
+void freeBST(BSTNode* root) {
+    if (root != NULL) {
+        freeBST(root->left);
+        freeBST(root->right);
+        free(root->parcel->destination); 
+        free(root->parcel);              
+        free(root);                      
+    }
+}
+
+//i changed this because the original only traversed the right side of the tree, not the left
+/*
 void cleanup(HashNode* hashTable) {
     for (int i = 0; i < TABLE_SIZE; ++i) {
         BSTNode* root = hashTable[i].root;
         while (root != NULL) {
             BSTNode* temp = root;
             root = root->right;
-            if (temp->parcel != NULL){ //did this get rid of warning?
-                free(temp->parcel->destination);
-                free(temp->parcel);
+            if (temp != NULL)
+            {
+                if (temp->parcel != NULL) {
+                    free(temp->parcel->destination); //free the dynamically allocated space from parcel node
+                    free(temp->parcel); //free dynamically allocated space from bst node
+                }
+                free(temp);
             }
-            free(temp);
         }
     }
 }
+*/
 
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: 
-//RETURNS: 
+
+
+//FUNCTION: traverseBST()
+//PARAMETERS: BSTNode* node, int& totalWeight, float& totalValuation - the root of the bst being searched, a variable for total weight and valuation
+//DESCRIPTION: searches the tree with in-order traversal. it visits every node of the bst, accesses the parcel node, and adds the value of the weight
+// and valuation of that parcel to the total variables.
+//RETURNS: void - variables are passed by reference and directly altered
 void traverseBST(BSTNode* node, int& totalWeight, float& totalValuation) {
     if (node == NULL) {
         return;
