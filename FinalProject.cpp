@@ -1,9 +1,13 @@
 /*
-* FILE: 
-* PROJECT:
-* PROGRAMMERS:
-* DESCRIPTION:
-    * 
+* FILE: project.cpp
+* PROJECT: Final Project 25%
+* PROGRAMMERS: Valentyn N and Alexia Tu
+* DESCRIPTION: This project involves developing an inventory management system for a courier company using hash
+    * tables and tree data structures. Parcel data, including destination, weight, and valuation, is loaded and 
+    * organized into a hash table with 127 buckets. Each bucket contains the root of a binary search tree (BST), 
+    * where each node represents a parcel, organized by weight. The program supports user interactions through a 
+    * menu that allows searching, displaying, and analyzing parcel data by country, weight, and valuation. Proper 
+    * memory management and error handling are emphasized, with dynamic allocation used for string data.
 */
 
 
@@ -14,13 +18,15 @@
 
 #define TABLE_SIZE 127
 #define MAX_FLIGHTS 5000
+#define VALID_INPUT 1 //used to determine if parse was valid
+#define HIGHER 1
+#define LOWER 2
 
 /* Each parcel will have a link to another node in the tree and 3 variables inside */
 typedef struct Parcel {
     char* destination;
     int weight;
     float valuation;
-    //struct Parcel* next; //??????is this used?
 } Parcel;
 
 /* Tree node */
@@ -30,7 +36,7 @@ typedef struct BSTNode {
     struct BSTNode* right;
 } BSTNode;
 
-/* 127 hash nodes will store 127 roots for 127 BSTs */
+/* hash node that will be used to store 127 roots to point to 127 BSTs */
 typedef struct HashNode {
     BSTNode* root; 
 } HashNode;
@@ -72,49 +78,55 @@ int main(void) {
         printf("5. Display lightest and heaviest parcel for the country\n");
         printf("6. Exit\n");
         printf("Enter your choice: ");
-        if (scanf("%d", &choice) != 1) {
+        if (scanf("%d", &choice) != VALID_INPUT) {
             printf("Invalid input, please enter a number.\n");
-            while (getchar() != '\n'); // Clear invalid input
+            while (getchar() != '\n'); // Clear invalid input VALENTYN - how does this work?
             continue;
         }
 
         switch (choice) {
         case 1:
             printf("Enter country name: ");
-            if (scanf("%20s", country) != 1) {
+            if (scanf("%20s", country) != VALID_INPUT) {
                 printf("Invalid input.\n");
                 while (getchar() != '\n'); // Clear invalid input
                 continue;
             }
-            searchByCountry(country, hashTable); //???????added an error display if they entered a country incorrect?
+            searchByCountry(country, hashTable); 
             break;
         case 2:
             printf("Enter country name: ");
-            if (scanf("%20s", country) != 1) {
+            if (scanf("%20s", country) != VALID_INPUT) {
                 printf("Invalid input.\n");
                 while (getchar() != '\n'); // Clear invalid input
                 continue;
             }
             printf("Enter weight: ");
-            if (scanf("%d", &weight) != 1) {
+            if (scanf("%d", &weight) != VALID_INPUT) {
                 printf("Invalid input.\n");
                 while (getchar() != '\n'); // Clear invalid input
                 continue;
             }
             printf("1. Higher than weight\n2. Lower than weight\n");
-            if (scanf("%d", &option) != 1) {
+            if (scanf("%d", &option) != VALID_INPUT) {
                 printf("Invalid input.\n");
                 while (getchar() != '\n'); // Clear invalid input
                 continue;
             }
-            if (option == 1)
+            if (option == HIGHER)
                 searchByWeight(country, weight, 1, hashTable);
-            else
+            else if (option == LOWER)
                 searchByWeight(country, weight, 0, hashTable);
+            else //if they don't enter valid higher or lower weight option, then just restart menu
+            {
+                printf("Invalid input.\n");
+                while (getchar() != '\n'); // Clear invalid input
+                continue;
+            }
             break;
         case 3:
             printf("Enter country name: ");
-            if (scanf("%20s", country) != 1) {
+            if (scanf("%20s", country) != VALID_INPUT) {
                 printf("Invalid input.\n");
                 while (getchar() != '\n'); // Clear invalid input
                 continue;
@@ -123,7 +135,7 @@ int main(void) {
             break;
         case 4:
             printf("Enter country name: ");
-            if (scanf("%20s", country) != 1) {
+            if (scanf("%20s", country) != VALID_INPUT) {
                 printf("Invalid input.\n");
                 while (getchar() != '\n'); // Clear invalid input
                 continue;
@@ -132,7 +144,7 @@ int main(void) {
             break;
         case 5:
             printf("Enter country name: ");
-            if (scanf("%20s", country) != 1) {
+            if (scanf("%20s", country) != VALID_INPUT) {
                 printf("Invalid input.\n");
                 while (getchar() != '\n'); // Clear invalid input
                 continue;
@@ -150,11 +162,12 @@ int main(void) {
 }
 
 /* Initialize the hash table */
-//FUNCTION: 
-//PARAMETERS:
+//FUNCTION: initializeHashTable()
+//PARAMETERS: void
 //DESCRIPTION: uses dynamically allocated space to create a hash table, ensures that the root does not have dangling pointer by initializing
-// to null
-//RETURNS: 
+// to null. the hash table is dynamically allocated in space but in consecutive blocks so it can still be accessed like an array. The
+// size is 127 as the requirements say.
+//RETURNS: hashTable - pointer to the beginning of the hashtable
 HashNode* initializeHashTable(void) {
     HashNode* hashTable = (HashNode*)malloc(TABLE_SIZE * sizeof(HashNode));
     if (hashTable == NULL) {
@@ -183,9 +196,9 @@ unsigned long computeHash(const char* str) {
 }
 
 /* Create a new parcel */
-//FUNCTION: 
-//PARAMETERS:
-//DESCRIPTION: allocates memory for destination dynamically
+//FUNCTION: createParcel()
+//PARAMETERS: const char* destination, int weight, float valuation - values that will be given to the fields of the parcel struct
+//DESCRIPTION: dynamically allocates space for the new parcel and also allocates memory for destination dynamically. 
 //RETURNS: 
 Parcel* createParcel(const char* destination, int weight, float valuation) {
     Parcel* newParcel = (Parcel*)malloc(sizeof(Parcel));
@@ -201,7 +214,6 @@ Parcel* createParcel(const char* destination, int weight, float valuation) {
     strcpy(newParcel->destination, destination);
     newParcel->weight = weight; //if gross weight is typically between 100gms and 50 000gms do we need to validate that it's within this range
     newParcel->valuation = valuation; //as above, range is $10 to $2000 ?????????? do we have to error check or is it just for our info
-    //newParcel->next = NULL;
     return newParcel;
 }
 
@@ -283,6 +295,10 @@ void printParcels(BSTNode* root) {
 void searchByCountry(const char* country, HashNode* hashTable) {
     unsigned long index = computeHash(country);
     BSTNode* root = hashTable[index].root;
+    if (root == NULL) {
+        printf("No country found for entered country: %s\n", country);
+        return;
+    }
     printParcels(root);
 }
 
