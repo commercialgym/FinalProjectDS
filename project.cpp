@@ -1,4 +1,4 @@
-/*
+﻿/*
 * FILE: project.cpp
 * PROJECT: Final Project 25%
 * PROGRAMMERS: Valentyn Novosydliuk and Alexia Tu
@@ -17,7 +17,10 @@
 #pragma warning(disable:4996)
 
 #define TABLE_SIZE 127
-#define MAX_FLIGHTS 5000
+#define MAX_FLIGHTS 5000 //for load data
+#define MIN_FLIGHTS 2000 //^
+#define ERROR 1//return code for load data function
+#define SUCCESS 0//^
 #define VALID_INPUT 1 //used to determine if parse was valid
 #define HIGHER 1 //used to check user input for searching by weight
 #define LOWER 2 //^
@@ -44,12 +47,12 @@ typedef struct HashNode {
 } HashNode;
 
 /* Function prototypes */
-void traverseBST(BSTNode* node, int& totalWeight, float& totalValuation);
+void traverseAndAddBST(BSTNode* node, int& totalWeight, float& totalValuation);
 HashNode* initializeHashTable(void);
 unsigned long computeHash(const char* str);
 Parcel* createParcel(const char* destination, int weight, float valuation);
 BSTNode* insertBST(BSTNode* root, Parcel* parcel);
-void loadData(const char* filename, HashNode* hashTable);
+int loadData(const char* filename, HashNode* hashTable);
 void printParcels(BSTNode* root);
 void searchByCountry(const char* country, HashNode* hashTable);
 void searchByWeightHelper(BSTNode* root, int weight, int higher);
@@ -65,7 +68,10 @@ void freeBST(BSTNode* root);
 int main(void) {
     HashNode* hashTable = initializeHashTable();
 
-    loadData("couriers.txt", hashTable);
+    if (loadData("couriers.txt", hashTable) == ERROR) {
+        printf("Not enough flights provided in the file\n");
+        return ERROR;
+    }
 
     int choice = 0;
     char country[21] = { 0 };
@@ -77,7 +83,7 @@ int main(void) {
         printf("1. Enter country name and display all the parcels details\n");
         printf("2. Enter country and weight pair to display parcels higher/lower than weight\n");
         printf("3. Display total parcel load and valuation for the country\n");
-        printf("4. Display cheapest and most expensive parcel?s details\n");
+        printf("4. Display cheapest and most expensive parcel�s details\n");
         printf("5. Display lightest and heaviest parcel for the country\n");
         printf("6. Exit\n");
         printf("Enter your choice: ");
@@ -157,7 +163,7 @@ int main(void) {
         case 6:
             cleanup(hashTable);
             free(hashTable);
-            return 0;
+            return SUCCESS;
         default:
             printf("Invalid choice, try again.\n");
         }
@@ -254,8 +260,8 @@ BSTNode* insertBST(BSTNode* root, Parcel* parcel) {
 // to the createParcel function to create a new parcel node. the name of the country is then given a hash value from the computeHash function, which 
 // value is then used to index the hashTable. the parcel is then inserted at this index of the hashTable with the insertBST() function. the total flights 
 // then incremented to ensure that the number of flights does not exceed 5000, as per requirements state. ensures proper error checking for file io
-//RETURNS: void
-void loadData(const char* filename, HashNode* hashTable) {
+//RETURNS: int - success or error whether there was enough flight data read
+int loadData(const char* filename, HashNode* hashTable) {
     FILE* pFile = fopen(filename, "r");
     if (pFile == NULL) {
         perror("Unable to open file\n\n");
@@ -278,7 +284,11 @@ void loadData(const char* filename, HashNode* hashTable) {
         printf("Error closing file\n\n");
         clearerr(pFile);
     }
-
+    if (totalFlights < MIN_FLIGHTS)
+    {
+        return ERROR;
+    }
+    return SUCCESS;
 }
 
 /* Prints parcels info */
@@ -361,7 +371,7 @@ void calculateTotalLoadAndValuation(const char* country, HashNode* hashTable) {
     float totalValuation = 0.0;
 
     // traverse the BST and accumulate weights and valuations
-    traverseBST(root, totalWeight, totalValuation);
+    traverseAndAddBST(root, totalWeight, totalValuation);
 
     printf("Total Load: %d grams, Total Valuation: $%.2f\n", totalWeight, totalValuation);
 }
@@ -471,7 +481,7 @@ void displayLightestAndHeaviest(const char* country, HashNode* hashTable) {
 void cleanup(HashNode* hashTable) {
     for (int i = 0; i < TABLE_SIZE; ++i) {
         if (hashTable[i].root != NULL) {
-            freeBST(hashTable[i].root); // Free the BST rooted at this hash table entry
+            freeBST(hashTable[i].root); //free the BST rooted at this hash table entry
         }
     }
 }
@@ -493,20 +503,20 @@ void freeBST(BSTNode* root) {
 }
 
 
-//FUNCTION: traverseBST()
+//FUNCTION: traverseAndAddBST()
 //PARAMETERS: BSTNode* node, int& totalWeight, float& totalValuation - the root of the bst being searched, a variable for total weight and valuation
 //DESCRIPTION: searches the tree with in-order traversal. it visits every node of the bst, accesses the parcel node, and adds the value of the weight
-// and valuation of that parcel to the total variables.
+// and valuation of that parcel to the total variables. used by the calculateTotalLoadAndValuation() function
 //RETURNS: void - variables are passed by reference and directly altered
-void traverseBST(BSTNode* node, int& totalWeight, float& totalValuation) {
+void traverseAndAddBST(BSTNode* node, int& totalWeight, float& totalValuation) {
     if (node == NULL) {
         return;
     }
-    // Traverse the left subtree
-    traverseBST(node->left, totalWeight, totalValuation);
-    // Visit the current node
+    //traverse the left subtree
+    traverseAndAddBST(node->left, totalWeight, totalValuation);
+    //visit the current node
     totalWeight += node->parcel->weight;
     totalValuation += node->parcel->valuation;
-    // Traverse the right subtree
-    traverseBST(node->right, totalWeight, totalValuation);
+    //traverse the right subtree
+    traverseAndAddBST(node->right, totalWeight, totalValuation);
 }
