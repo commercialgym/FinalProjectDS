@@ -26,6 +26,10 @@
 #define LOWER 2 //^
 #define SEARCH_HIGH 1
 #define SEARCH_LOW 0
+#define MAX_WEIGHT 50000
+#define MIN_WEIGHT 100
+#define MIN_PRICE 10
+#define MAX_PRICE 2000
 
 /* Each parcel will have a link to another node in the tree and 3 variables inside */
 typedef struct Parcel {
@@ -41,7 +45,7 @@ typedef struct BSTNode {
     struct BSTNode* right;
 } BSTNode;
 
-/* hash node that will be used to store 127 roots to point to 127 BSTs */
+/* Hash node that will be used to store 127 roots to point to 127 BSTs */
 typedef struct HashNode {
     BSTNode* root;
 } HashNode;
@@ -68,7 +72,7 @@ void freeBST(BSTNode* root);
 int main(void) {
     HashNode* hashTable = initializeHashTable();
 
-    if (loadData("couriers.txt", hashTable) == ERROR) {
+    if (loadData("courier.txt", hashTable) == ERROR) {
         printf("Not enough flights provided in the file\n");
         return ERROR;
     }
@@ -83,8 +87,8 @@ int main(void) {
         printf("1. Enter country name and display all the parcels details\n");
         printf("2. Enter country and weight pair to display parcels higher/lower than weight\n");
         printf("3. Display total parcel load and valuation for the country\n");
-        printf("4. Display cheapest and most expensive parcel�s details\n");
-        printf("5. Display lightest and heaviest parcel for the country\n");
+        printf("4. Display cheapest and most expensive parcel's details\n");
+        printf("5. Display lightest and heaviest parcels for the country\n");
         printf("6. Exit\n");
         printf("Enter your choice: ");
         if (scanf("%d", &choice) != VALID_INPUT) {
@@ -196,10 +200,10 @@ HashNode* initializeHashTable(void) {
 // a specific bucket index of the hash table.
 //RETURNS: unsigned long - a generated index to be used in the hash table for the country that was passed to this function
 unsigned long computeHash(const char* str) {
-    unsigned long hash = 5381; 
+    unsigned long hash = 5381;
     int c = 0;
     while ((c = *str++)) {
-        hash = ((hash << 5) + hash) + c; 
+        hash = ((hash << 5) + hash) + c;
     }
     return hash % TABLE_SIZE;
 }
@@ -208,8 +212,11 @@ unsigned long computeHash(const char* str) {
 //FUNCTION: createParcel()
 //PARAMETERS: const char* destination, int weight, float valuation - values that will be given to the fields of the parcel struct
 //DESCRIPTION: dynamically allocates space for the new parcel and also allocates memory for destination dynamically. 
-//RETURNS: newParcel - pointer to the new parcel
+//RETURNS: newParcel - pointer to the new parcel or NULL if the weight and valuation is out of the range
 Parcel* createParcel(const char* destination, int weight, float valuation) {
+    if (weight > MAX_WEIGHT || weight < MIN_WEIGHT || valuation > MAX_PRICE || valuation < MIN_PRICE) {
+        return NULL;
+    }
     Parcel* newParcel = (Parcel*)malloc(sizeof(Parcel));
     if (newParcel == NULL) {
         perror("Unable to allocate memory for parcel");
@@ -256,7 +263,7 @@ BSTNode* insertBST(BSTNode* root, Parcel* parcel) {
 /* Load data from file into hash table */
 //FUNCTION: loadData()
 //PARAMETERS: const char* filename, HashNode* hashTable - the file name from main to be opened, and the hash table to insert the countries into
-//DESCRIPTION: using FILE i/o to read from the couriers.txt file. after reading the name of the country as well as it's details, the info is sent
+//DESCRIPTION: using FILE i/o to read from the courier.txt file. after reading the name of the country as well as it's details, the info is sent
 // to the createParcel function to create a new parcel node. the name of the country is then given a hash value from the computeHash function, which 
 // value is then used to index the hashTable. the parcel is then inserted at this index of the hashTable with the insertBST() function. the total flights 
 // then incremented to ensure that the number of flights does not exceed 5000, as per requirements state. ensures proper error checking for file io
@@ -270,9 +277,12 @@ int loadData(const char* filename, HashNode* hashTable) {
     int totalFlights = 0; //to ensure that the list of names is at least 2000 but does not exceed 5000
     char destination[21];
     int weight = 0;
-    float valuation; //?????????????????does it account for empty /  new lines. add error checking for inproper format
-    while ((fscanf(pFile, "%20[^,],%d,%f\n", destination, &weight, &valuation) != EOF) && totalFlights < MAX_FLIGHTS) { //EOF or NULL?
+    float valuation; 
+    while ((fscanf(pFile, "%20[^,],%d,%f\n", destination, &weight, &valuation) != EOF) && totalFlights < MAX_FLIGHTS) { 
         Parcel* parcel = createParcel(destination, weight, valuation);
+        if (parcel == NULL) { //means there was an issue with weight or valuation
+            continue;
+        }
         unsigned long index = computeHash(destination);
         hashTable[index].root = insertBST(hashTable[index].root, parcel);
         totalFlights++;
